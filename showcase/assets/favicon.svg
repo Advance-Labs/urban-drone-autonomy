@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The site's own motif: HUD corner brackets framing the aircraft. Drawn
+       from the subject rather than generic drone clipart, and it is the one
+       mark already on every page.
+
+       Sized for 16px first, which is the size that actually matters. An
+       earlier version carried the vehicle's heading stalk as the viewer does;
+       at 16px it merged with the dot into an ambiguous blob, so the brackets
+       got heavier and the stalk went.
+
+       Amber #c9871f sits between the light and dark accents, so one file
+       holds on a white tab strip and a dark one. -->
+  <g fill="none" stroke="#c9871f" stroke-width="4" stroke-linecap="square">
+    <path d="M4.5 11.5V4.5h7"/>
+    <path d="M20.5 4.5h7v7"/>
+    <path d="M27.5 20.5v7h-7"/>
+    <path d="M11.5 27.5h-7v-7"/>
+  </g>
+  <circle cx="16" cy="16" r="4.6" fill="#c9871f"/>
+</svg>

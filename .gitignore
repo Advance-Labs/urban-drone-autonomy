@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Overpass responses, cached so re-runs work offline. Derived data, not source.
+.osm-cache/
+
+# Built showcase output — regenerate with `python showcase/build.py`.
+showcase/index.html
+showcase/dist/
+
+# Flight logs written by `run.py --log`.
+*.log.json
+flight.json
+patrol.json

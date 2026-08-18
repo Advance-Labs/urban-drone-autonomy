@@ -1,0 +1,1674 @@
+<title>Flight Replay</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --ink: #14161a;
+    --muted: #676e7a;
+    --line: #d9dce1;
+    --grid: #c8ccd3;
+    --accent: #2f6fed;
+    --path: #2f6fed;
+    --warn: #d98324;
+    --danger: #c8452f;
+    --ok: #2e8b57;
+    --shadow: 0 1px 3px rgba(0, 0, 0, .09), 0 6px 18px rgba(0, 0, 0, .05);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #14161a;
+      --panel: #1c1f25;
+      --ink: #e8eaee;
+      --muted: #949cab;
+      --line: #2c313a;
+      --grid: #333944;
+      --accent: #5b8cf5;
+      --path: #5b8cf5;
+      --warn: #e0a049;
+      --danger: #e26a54;
+      --ok: #4fb07a;
+      --shadow: 0 1px 3px rgba(0, 0, 0, .4), 0 6px 20px rgba(0, 0, 0, .3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a;
+    --panel: #1c1f25;
+    --ink: #e8eaee;
+    --muted: #949cab;
+    --line: #2c313a;
+    --grid: #333944;
+    --accent: #5b8cf5;
+    --path: #5b8cf5;
+    --warn: #e0a049;
+    --danger: #e26a54;
+    --ok: #4fb07a;
+    --shadow: 0 1px 3px rgba(0, 0, 0, .4), 0 6px 20px rgba(0, 0, 0, .3);
+  }
+
+  * { box-sizing: border-box; }
+  /* The UA rule for [hidden] is `display: none`, which ANY explicit display
+     declaration outranks -- `.empty { display: grid }` alone was enough to
+     leave the overlay hit-testable across the whole canvas and swallow every
+     mouse event while looking perfectly invisible. */
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { display: flex; flex-direction: column; height: 100vh; }
+  header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: -.01em; }
+  .spacer { flex: 1; }
+  .chip {
+    font: 500 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 5px 9px; border-radius: 5px; background: var(--bg);
+    border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+  }
+  .chip b { color: var(--ink); font-weight: 600; }
+  button, label.file {
+    font: 500 13px/1 inherit; padding: 7px 13px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    cursor: pointer;
+  }
+  button:hover, label.file:hover { border-color: var(--accent); color: var(--accent); }
+  button[disabled] { opacity: .45; cursor: default; }
+  input[type=file] { display: none; }
+
+  main { flex: 1; position: relative; min-height: 0; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+
+  .hud {
+    position: absolute; top: 14px; left: 14px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+    box-shadow: var(--shadow); min-width: 180px; pointer-events: none;
+  }
+  .hud dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; }
+  .hud dt { color: var(--muted); font-size: 12px; }
+  .hud dd {
+    margin: 0; text-align: right; font: 500 12px/1.5 ui-monospace, Menlo, monospace;
+  }
+
+  .legend {
+    position: absolute; top: 14px; right: 14px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+    box-shadow: var(--shadow); font-size: 12px; pointer-events: none;
+  }
+  .legend div { display: flex; align-items: center; gap: 7px; margin: 3px 0; color: var(--muted); }
+  .sw { width: 11px; height: 3px; border-radius: 2px; flex: none; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .legend .keys {
+    display: block; margin-top: 9px; padding-top: 9px;
+    border-top: 1px solid var(--line); font-size: 11px; line-height: 1.7;
+    color: var(--muted); opacity: .85;
+  }
+  button[data-on="1"] { border-color: var(--accent); color: var(--accent); }
+
+  footer {
+    display: flex; align-items: center; gap: 12px; padding: 10px 18px;
+    border-top: 1px solid var(--line); background: var(--panel); flex-wrap: wrap;
+  }
+  input[type=range] { flex: 1; min-width: 180px; accent-color: var(--accent); }
+  .time { font: 500 12px/1 ui-monospace, Menlo, monospace; color: var(--muted); min-width: 78px; }
+  .empty {
+    position: absolute; inset: 0; display: grid; place-content: center;
+    text-align: center; color: var(--muted); gap: 8px; padding: 20px;
+  }
+  .empty code {
+    font-size: 12px; background: var(--bg); padding: 3px 7px;
+    border-radius: 4px; border: 1px solid var(--line); color: var(--ink);
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Flight Replay</h1>
+    <span class="chip" id="c-status">no flight loaded</span>
+    <span class="chip" id="c-wind">wind &mdash;</span>
+    <span class="chip" id="c-cov" hidden>coverage &mdash;</span>
+    <span class="chip" id="c-map" hidden>map &mdash;</span>
+    <div class="spacer"></div>
+    <label class="file">load flight.json<input type="file" id="file" accept=".json"></label>
+    <button id="top">top</button>
+    <button id="side">side</button>
+    <button id="iso">iso</button>
+    <button id="reset">reframe</button>
+    <button id="followBtn">follow</button>
+  </header>
+
+  <main>
+    <canvas id="cv"></canvas>
+    <div class="hud" id="hud" hidden>
+      <dl>
+        <dt>time</dt><dd id="h-t">0.0 s</dd>
+        <dt>alt</dt><dd id="h-alt">0.0 m</dd>
+        <dt>dist</dt><dd id="h-dist">0 m</dd>
+        <dt>batt</dt><dd id="h-batt">100%</dd>
+        <dt>phase</dt><dd id="h-phase">&mdash;</dd>
+      </dl>
+    </div>
+    <div class="legend" id="legend" hidden>
+      <div><span class="sw" style="background:var(--path)"></span>flight path</div>
+      <div><span class="sw" style="background:var(--warn)"></span>returning</div>
+      <div><span class="sw" style="background:var(--danger)"></span>divert / land</div>
+      <div><span class="dot" style="background:var(--ok)"></span>home</div>
+      <div><span class="dot" style="background:var(--warn)"></span>landing site</div>
+      <div><span class="dot" style="background:var(--danger)"></span>person / vehicle</div>
+      <div><span class="sw" style="background:var(--danger);opacity:.5"></span>legal keep-out</div>
+      <div><span class="sw" style="background:var(--accent)"></span>inferred pole</div>
+      <div><span class="sw" style="background:var(--warn)"></span>inferred span</div>
+      <div><span class="sw" style="background:var(--danger);opacity:.7"></span>mapped conductor</div>
+      <div><span class="sw" style="background:var(--danger);opacity:.35"></span>synthesised conductor</div>
+      <div class="keys">
+        drag look &middot; WASD fly &middot; QE height &middot; shift faster<br>
+        right-drag pan &middot; scroll dolly &middot; alt-drag orbit<br>
+        dbl-click focus &middot; F follow &middot; R reframe &middot; space play
+      </div>
+    </div>
+    <div class="empty" id="empty">
+      <div>No flight loaded.</div>
+      <div><code>python run.py survey --sites --wind 5,2 --log flight.json</code></div>
+      <div>then load the file above.</div>
+    </div>
+  </main>
+
+  <footer>
+    <button id="play" disabled>play</button>
+    <button id="speedBtn">4x</button>
+    <button id="loopBtn" data-on="1">loop</button>
+    <input type="range" id="scrub" min="0" max="0" value="0" disabled>
+    <span class="time" id="time">0.0 / 0.0 s</span>
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* ---------------------------------------------------------------------------
+   A flight path is points, lines, and markers -- that needs a camera matrix,
+   not a render engine. This projects NED coordinates to the 2D canvas by hand:
+   rotate into camera space, divide by depth, scale to pixels. About 30 lines
+   of maths replaces a megabyte of library.
+   NED convention throughout: north +x, east +y, down +z, so altitude = -down.
+--------------------------------------------------------------------------- */
+
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+
+/* An eye-centric free camera, the way Unity and Roblox Studio behave.
+
+   The earlier version was an orbit rig: yaw and pitch swung the camera AROUND
+   a fixed pivot, so dragging always felt like spinning a model on a turntable.
+   That is the right control for inspecting one object and the wrong one for
+   moving through a place -- and a city is a place.
+
+   Here the camera has a position and a look direction, and nothing else. Yaw
+   and pitch turn it where it stands; WASD flies it. There is no pivot to be
+   tethered to, which is exactly the difference the user feels.
+
+   Orbiting is still useful for studying a specific waypoint, so it survives as
+   a modifier (alt-drag) rather than as the only mode. */
+const cam = {
+  eye: { n: -180, e: -180, up: 120 },   // camera position in world metres
+  yaw: 0.79,                             // heading, radians; 0 looks north
+  pitch: -0.5,                           // radians; negative looks down
+  follow: false,
+  // While following, swing the camera round to sit behind the aircraft as it
+  // turns, so you are always looking at where it is going. Released the
+  // moment the viewer drags to look somewhere specific -- a camera that
+  // fights you back to its own idea of "correct" is worse than one that
+  // simply stays put.
+  autoHeading: true,
+  // Only used by alt-drag orbit and by `frameFlight`, to know how far ahead
+  // the notional point of interest sits.
+  focusDist: 260,
+};
+let flight = null;
+let frame = 0;
+let playing = false;
+let lastRAF = 0;
+let looping = true;
+let speedMul = 4; // playback multiplier; a survey is a long sit at 1x
+const keys = new Set();
+
+// Pitch is clamped just short of straight up/down: at exactly +/-90 degrees
+// the yaw axis and the view axis coincide and the basis degenerates.
+const PITCH_LIMIT = Math.PI / 2 - 0.02;
+
+// Debug hook: lets a headless driver assert that input actually moved the
+// camera, rather than only that no exception was thrown.
+window.__cam = cam;
+window.__focusPoint = () => focusPoint();
+
+/* -- projection ----------------------------------------------------------- */
+
+/* Orthonormal camera basis in world space, as {n, e, up} triples.
+
+   Deriving all three from yaw/pitch keeps look, pan and fly consistent by
+   construction: "right" always means right on screen, whatever the camera is
+   doing. The previous version hand-wrote each axis separately and they drifted
+   apart once pitch was involved. */
+function basis() {
+  const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+
+  const fwd = { n: cp * cy, e: cp * sy, up: sp };
+  // Right is horizontal by definition, so the horizon never rolls.
+  const right = { n: -sy, e: cy, up: 0 };
+  // up = forward x right, which tilts back as the camera pitches up.
+  const up = {
+    n: -cy * sp,
+    e: -sy * sp,
+    up: cp,
+  };
+  return { fwd, right, up };
+}
+
+function dot(a, b) {
+  return a.n * b.n + a.e * b.e + a.up * b.up;
+}
+
+/* Distance in front of the camera. Negative is behind it. */
+function camDepth(p) {
+  const { fwd } = basis();
+  return (
+    (p.n - cam.eye.n) * fwd.n +
+    (p.e - cam.eye.e) * fwd.e +
+    (-p.d - cam.eye.up) * fwd.up
+  );
+}
+
+const NEAR = 0.5;
+
+/* Clip a world-space segment against the near plane.
+
+   Culling a segment because one end is behind the camera is wrong: the
+   visible half disappears with it. That was survivable when the track was
+   sampled every metre, and stopped being survivable once records were thinned
+   to their shape -- a single segment can now span an entire survey leg, so
+   dropping one removes hundreds of metres of path. At a close chase range
+   more than half the path vanished.
+
+   Returns the drawable portion, or null when the whole segment is behind. */
+function clipNear(a, b) {
+  const da = camDepth(a);
+  const db = camDepth(b);
+  if (da >= NEAR && db >= NEAR) return [a, b];
+  if (da < NEAR && db < NEAR) return null;
+
+  const t = (NEAR - da) / (db - da);
+  const cut = {
+    n: a.n + (b.n - a.n) * t,
+    e: a.e + (b.e - a.e) * t,
+    d: a.d + (b.d - a.d) * t,
+  };
+  return da >= NEAR ? [a, cut] : [cut, b];
+}
+
+function project(p) {
+  // Defensive: one bad index should cost a single skipped segment, not throw
+  // out of the whole render and leave a blank canvas nine times a second.
+  if (!p) return null;
+  // World point relative to the eye. NED in, (north, east, up) out.
+  const v = { n: p.n - cam.eye.n, e: p.e - cam.eye.e, up: -p.d - cam.eye.up };
+  const { fwd, right, up } = basis();
+
+  const depth = dot(v, fwd);
+  // Behind the camera, or in the near plane: skip rather than draw a segment
+  // that wraps across the screen.
+  if (depth < 0.5) return null;
+
+  const f = Math.min(cv.clientWidth, cv.clientHeight) * 0.9;
+  return {
+    x: cv.clientWidth / 2 + (dot(v, right) * f) / depth,
+    y: cv.clientHeight / 2 - (dot(v, up) * f) / depth,
+    depth,
+  };
+}
+
+/* Where the camera is looking, `focusDist` ahead. The notional pivot for
+   alt-orbit, and what `follow` keeps locked onto the vehicle. */
+function focusPoint() {
+  const { fwd } = basis();
+  return {
+    n: cam.eye.n + fwd.n * cam.focusDist,
+    e: cam.eye.e + fwd.e * cam.focusDist,
+    up: cam.eye.up + fwd.up * cam.focusDist,
+  };
+}
+
+function moveEye(axis, amount) {
+  cam.eye.n += axis.n * amount;
+  cam.eye.e += axis.e * amount;
+  cam.eye.up += axis.up * amount;
+}
+
+/* Point the camera at a world position without moving it. */
+function lookAtPoint(t) {
+  const dn = t.n - cam.eye.n, de = t.e - cam.eye.e, dup = t.up - cam.eye.up;
+  const flat = Math.hypot(dn, de);
+  cam.yaw = Math.atan2(de, dn);
+  cam.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, Math.atan2(dup, flat)));
+  cam.focusDist = Math.max(1, Math.hypot(flat, dup));
+}
+
+function seg(a, b, style, width) {
+  const clipped = clipNear(a, b);
+  if (!clipped) return;
+  const pa = project(clipped[0]), pb = project(clipped[1]);
+  if (!pa || !pb) return;
+  ctx.strokeStyle = style;
+  ctx.lineWidth = width || 1;
+  ctx.beginPath();
+  ctx.moveTo(pa.x, pa.y);
+  ctx.lineTo(pb.x, pb.y);
+  ctx.stroke();
+}
+
+/* Theme colours, resolved once and cached.
+
+   `getComputedStyle` forces a style recalculation, and calling it per drawn
+   segment meant ~4,500 forced recalcs per frame for values that only change
+   when the theme does. Resolve on load and on theme change; never in a loop. */
+const PALETTE_KEYS = [
+  "--bg", "--panel", "--ink", "--muted", "--line", "--grid",
+  "--accent", "--path", "--warn", "--danger", "--ok",
+];
+let palette = {};
+
+function refreshPalette() {
+  const cs = getComputedStyle(document.documentElement);
+  PALETTE_KEYS.forEach((k) => { palette[k] = cs.getPropertyValue(k).trim(); });
+}
+
+function css(name) {
+  return palette[name] || "#888";
+}
+
+refreshPalette();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", refreshPalette);
+
+/* Batched stroking. One beginPath and one stroke for a whole polyline, rather
+   than a path per segment -- the per-call overhead of ctx.stroke dominates
+   everything else at these counts. A point behind the camera lifts the pen
+   instead of breaking the batch. */
+function polyline(points, colour, width, alpha) {
+  if (points.length < 2) return;
+  ctx.globalAlpha = alpha === undefined ? 1 : alpha;
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = width;
+  ctx.beginPath();
+
+  // Walked as segments rather than points, because a segment straddling the
+  // near plane has to be cut rather than skipped.
+  let penAt = null;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i], b = points[i + 1];
+    if (!a || !b) { penAt = null; continue; }
+    const clipped = clipNear(a, b);
+    if (!clipped) { penAt = null; continue; }
+
+    const pa = project(clipped[0]);
+    const pb = project(clipped[1]);
+    if (!pa || !pb) { penAt = null; continue; }
+
+    if (penAt !== clipped[0]) ctx.moveTo(pa.x, pa.y);
+    ctx.lineTo(pb.x, pb.y);
+    penAt = clipped[1] === b ? b : null;   // only continue on an uncut join
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+/* -- scene ---------------------------------------------------------------- */
+
+// Ground grid extent, recomputed per flight so it always reaches under the
+// whole track. A fixed +/-200 m grid leaves a long-range survey floating over
+// nothing, which destroys the depth cue the grid exists to provide.
+let gridSpan = 200, gridStep = 20;
+
+function fitGrid(far) {
+  // Aim for roughly 14 divisions across the scene. Perspective magnifies the
+  // near edge enormously, so a grid that reads as "fine" in plan view becomes
+  // a wall of lines in an isometric view -- keep the count low and let the
+  // spacing grow with the flight.
+  const raw = (far * 2) / 14;
+  const nice = [5, 10, 25, 50, 100, 200, 500];
+  gridStep = nice.find((s) => s >= raw) || 1000;
+  gridSpan = Math.ceil(far / gridStep) * gridStep;
+}
+
+function drawGrid() {
+  // Subtle: the grid is a depth cue, not the subject.
+  // One batched path for the whole grid instead of two strokes per line.
+  ctx.globalAlpha = 0.22;
+  ctx.strokeStyle = css("--grid");
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = -gridSpan; i <= gridSpan; i += gridStep) {
+    const pairs = [
+      [{ n: i, e: -gridSpan, d: 0 }, { n: i, e: gridSpan, d: 0 }],
+      [{ n: -gridSpan, e: i, d: 0 }, { n: gridSpan, e: i, d: 0 }],
+    ];
+    for (const [a, b] of pairs) {
+      const pa = project(a), pb = project(b);
+      if (!pa || !pb) continue;
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(pb.x, pb.y);
+    }
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+function drawCircle(radius, down, style, dash) {
+  const pts = [];
+  for (let a = 0; a <= 64; a++) {
+    const th = (a / 64) * Math.PI * 2;
+    pts.push({ n: radius * Math.cos(th), e: radius * Math.sin(th), d: down });
+  }
+  ctx.setLineDash(dash || []);
+  for (let i = 0; i < pts.length - 1; i++) seg(pts[i], pts[i + 1], style, 1.5);
+  ctx.setLineDash([]);
+}
+
+function marker(p, colour, label, r) {
+  const s = project(p);
+  if (!s) return;
+  ctx.fillStyle = colour;
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, r || 5, 0, Math.PI * 2);
+  ctx.fill();
+  if (label) {
+    ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    // Halo behind the text: markers cluster near home and labels overlap each
+    // other and the flight path, which is unreadable without it.
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = css("--panel");
+    ctx.lineJoin = "round";
+    ctx.strokeText(label, s.x, s.y - (r || 5) - 6);
+    ctx.fillStyle = css("--muted");
+    ctx.fillText(label, s.x, s.y - (r || 5) - 6);
+  }
+}
+
+function phaseColour(phase) {
+  if (phase === "divert" || phase === "land") return css("--danger");
+  if (phase === "rtl") return css("--warn");
+  return css("--path");
+}
+
+/* Render geometry, precomputed once per flight.
+
+   A 200 s mission logged at 10 Hz is 2,000 points, and redrawing all of them
+   every frame is wasted work: at any sane zoom, consecutive samples land on
+   the same pixel. Decimating to a few hundred points is visually identical
+   and cuts the per-frame cost proportionally. Phase transitions are always
+   kept, so the colour boundaries stay exactly where they belong.
+
+   The full-resolution track is untouched -- the HUD still reads it directly,
+   so no displayed number loses precision. */
+let drawPts = [];      // decimated samples, each carrying its own timestamp
+let shadowPts = [];    // same path flattened to the ground plane
+let dropPts = [];      // sparse vertical ticks
+
+function buildDrawGeometry() {
+  const t = flight.track;
+  const target = 500;
+  const stride = Math.max(1, Math.ceil(t.length / target));
+
+  drawPts = [];
+  let lastPhase = null;
+  for (let i = 0; i < t.length; i++) {
+    const boundary = t[i].phase !== lastPhase;
+    if (i % stride === 0 || boundary || i === t.length - 1) {
+      drawPts.push(t[i]);
+      lastPhase = t[i].phase;
+    }
+  }
+
+  shadowPts = drawPts.map((p) => ({ n: p.n, e: p.e, d: 0 }));
+  dropPts = [];
+  for (let i = 0; i < drawPts.length; i += 10) {
+    dropPts.push(drawPts[i], { n: drawPts[i].n, e: drawPts[i].e, d: 0 });
+  }
+}
+
+function drawTrack() {
+  if (!drawPts.length) return;
+
+  // Vertical drop ticks: height is ambiguous from a 3D polyline alone.
+  // Drawn as one batched path of disjoint segments.
+  ctx.globalAlpha = 0.16;
+  ctx.strokeStyle = css("--muted");
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < dropPts.length; i += 2) {
+    const a = project(dropPts[i]), b = project(dropPts[i + 1]);
+    if (!a || !b) continue;
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  polyline(shadowPts, css("--muted"), 1, 0.3);
+
+  // Cut the flown portion at the current TIME, not at a sample index.
+  let cut = drawPts.length - 1;
+  for (let i = 0; i < drawPts.length; i++) {
+    if (drawPts[i].t > frame) { cut = i; break; }
+  }
+
+  // Flown portion, in runs of constant phase so each run is one stroke.
+  let start = 0;
+  while (start < cut) {
+    const phase = drawPts[start].phase;
+    let end = start;
+    while (end + 1 <= cut && drawPts[end + 1].phase === phase) end++;
+    polyline(drawPts.slice(start, end + 1), phaseColour(phase), 2.5);
+    start = end === start ? start + 1 : end;
+  }
+
+  // The route ahead, dashed. Deliberately legible rather than a faint hint:
+  // in a close chase view the flown path is behind the camera, so this is the
+  // only path on screen -- at 18% muted grey it simply vanished on a light
+  // ground, which read as the path disappearing when you zoomed in.
+  ctx.setLineDash([7, 6]);
+  polyline(drawPts.slice(cut), css("--path"), 1.8, 0.5);
+  ctx.setLineDash([]);
+}
+
+function drawVehicle() {
+  const p = sampleAt(frame);
+  const s = project(p);
+  if (!s) return;
+
+  // Heading arrow, projected so it tilts correctly with the camera.
+  const rad = (p.hdg * Math.PI) / 180;
+  const nose = project({ n: p.n + 9 * Math.cos(rad), e: p.e + 9 * Math.sin(rad), d: p.d });
+  if (nose) {
+    ctx.strokeStyle = css("--accent");
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y);
+    ctx.lineTo(nose.x, nose.y);
+    ctx.stroke();
+  }
+  ctx.fillStyle = css("--accent");
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = css("--panel");
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+/* Buildings as solid boxes, drawn with the painter's algorithm: sort every
+   face by its centroid depth and draw far-to-near. There is no z-buffer on a
+   2D canvas, so ordering IS the occlusion. Per-face rather than per-building
+   because two boxes can interleave in depth, and sorting whole buildings
+   makes a near tower vanish behind a far one at some camera angles. */
+function drawCity() {
+  const city = flight.context && flight.context.city;
+  // Either representation may be present: `footprints` from OSM (polygons),
+  // `buildings` from the procedural generator (axis-aligned boxes).
+  if (!city || (!city.footprints && !city.buildings)) return;
+
+  const faces = [];
+
+  // OSM cities export real polygon outlines; the procedural one exports
+  // axis-aligned boxes. Extrude whichever is present -- a bounding box around
+  // an L-shaped footprint fills a notch that is actually flyable, so the
+  // polygon path is not cosmetic.
+  (city.footprints || []).forEach((f) => {
+    const ring = f.pts.map(([n, e]) => ({ n, e, d: 0 }));
+    const roof = f.pts.map(([n, e]) => ({ n, e, d: -f.h }));
+    for (let i = 0; i < ring.length; i++) {
+      const j = (i + 1) % ring.length;
+      faces.push({ pts: [ring[i], ring[j], roof[j], roof[i]], shade: i % 4, est: f.est });
+    }
+    faces.push({ pts: roof, shade: 4, est: f.est });
+  });
+
+  (city.buildings || []).forEach((b) => {
+    const n0 = b.n - b.sn / 2, n1 = b.n + b.sn / 2;
+    const e0 = b.e - b.se / 2, e1 = b.e + b.se / 2;
+    const top = -b.h;
+    const corners = {
+      // ground ring then roof ring
+      g: [{n:n0,e:e0,d:0},{n:n1,e:e0,d:0},{n:n1,e:e1,d:0},{n:n0,e:e1,d:0}],
+      r: [{n:n0,e:e0,d:top},{n:n1,e:e0,d:top},{n:n1,e:e1,d:top},{n:n0,e:e1,d:top}],
+    };
+    // Four walls plus a roof. The floor is never visible from above ground.
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4;
+      faces.push({ pts: [corners.g[i], corners.g[j], corners.r[j], corners.r[i]], shade: i });
+    }
+    faces.push({ pts: corners.r, shade: 4 });
+  });
+
+  const drawable = [];
+  faces.forEach((f) => {
+    const proj = f.pts.map(project);
+    if (proj.some((p) => !p)) return; // any vertex behind camera: skip
+    const depth = proj.reduce((s, p) => s + p.depth, 0) / proj.length;
+    drawable.push({ proj, depth, shade: f.shade });
+  });
+  drawable.sort((a, b) => b.depth - a.depth);
+
+  const dark = isDark();
+  drawable.forEach((f) => {
+    // Flat per-orientation shading. Enough to read the box as a solid; a
+    // real lighting model would be noise at this scale.
+    const tone = f.shade === 4 ? (dark ? 0.30 : 0.90)
+               : [dark ? 0.16 : 0.72, dark ? 0.22 : 0.80,
+                  dark ? 0.13 : 0.66, dark ? 0.19 : 0.76][f.shade];
+    const v = Math.round(tone * 255);
+    // A guessed height gets a faint warm tint, so a route planned over
+    // estimated geometry is visibly less trustworthy than one over surveyed
+    // geometry. Most OSM buildings carry no height tag at all.
+    const warm = f.est ? 10 : 0;
+    ctx.fillStyle = `rgb(${v + warm},${v},${v + (dark ? 6 : 0) - warm})`;
+    ctx.strokeStyle = css("--line");
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(f.proj[0].x, f.proj[0].y);
+    for (let i = 1; i < f.proj.length; i++) ctx.lineTo(f.proj[i].x, f.proj[i].y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  });
+}
+
+/* Streets, drawn flat on the ground plane. Cheap orientation cue, and they
+   show where the hazards belong -- cars on roads, people beside them. */
+function drawRoads() {
+  const city = flight.context && flight.context.city;
+  if (!city) return;
+  (city.roads || []).forEach((way) => {
+    polyline(way.map(([n, e]) => ({ n, e, d: 0 })), css("--muted"), 1.5, 0.35);
+  });
+  // Sidewalks fainter than carriageways: they matter because that is where
+  // pedestrians are, not because a drone routes along them.
+  (city.sidewalks || []).forEach((way) => {
+    polyline(way.map(([n, e]) => ({ n, e, d: 0 })), css("--muted"), 1, 0.18);
+  });
+}
+
+/* Power runs and street furniture from the map.
+
+   Synthesised runs are dashed. OSM maps transmission well (visible from
+   satellite) and residential distribution badly, so most streets get an
+   invented line -- and a hazard the aircraft "knows about" only because we
+   invented it must be visibly distinct from one that was observed. */
+function drawInfrastructure() {
+  const city = flight.context && flight.context.city;
+  if (!city) return;
+
+  (city.power || []).forEach((run) => {
+    const sag = Math.max(0.4, 40 * 0.03);
+    const pts = [];
+    for (let i = 0; i < run.pts.length - 1; i++) {
+      const [an, ae] = run.pts[i];
+      const [bn, be] = run.pts[i + 1];
+      for (let k = 0; k <= 6; k++) {
+        const t = k / 6;
+        pts.push({
+          n: an + (bn - an) * t, e: ae + (be - ae) * t,
+          d: -run.h + sag * 4 * t * (1 - t),
+        });
+      }
+    }
+    ctx.setLineDash(run.sourced ? [] : [5, 4]);
+    polyline(pts, css("--danger"), 1.5, run.sourced ? 0.7 : 0.4);
+    ctx.setLineDash([]);
+  });
+
+  // Poles, towers and lamps: the landmarks the camera pipeline detects.
+  ctx.strokeStyle = css("--muted");
+  ctx.lineWidth = 1.2;
+  ctx.globalAlpha = 0.45;
+  ctx.beginPath();
+  (city.furniture || []).forEach((f) => {
+    const base = project({ n: f.n, e: f.e, d: 0 });
+    const top = project({ n: f.n, e: f.e, d: -f.h });
+    if (!base || !top) return;
+    ctx.moveTo(base.x, base.y);
+    ctx.lineTo(top.x, top.y);
+  });
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+/* People and vehicles. The circle around a person is the LEGAL keep-out, not
+   their body -- it is roughly a hundred times their physical size, and it is
+   the thing the planner actually routes around. Drawing the body instead
+   would make the detours look inexplicable. */
+function drawHazards() {
+  const h = flight.context && flight.context.hazards;
+  if (!h) return;
+  const t = sampleAt(frame).t;
+
+  (h.vehicles || []).forEach((v) => {
+    const p = trackAlong(v.waypoints, t, 11.0);
+    if (!p) return;
+    polyline(v.waypoints.map((w) => ({ n: w.n, e: w.e, d: 0 })), css("--muted"), 1, 0.3);
+    marker({ n: p.n, e: p.e, d: -0.75 }, css("--danger"), v.name, 5);
+  });
+
+  (h.pedestrians || []).forEach((ped) => {
+    const p = trackAlong(ped.waypoints, t, 1.4);
+    if (!p) return;
+    // The keep-out cylinder, on the ground where the rule applies.
+    const ring = [];
+    for (let a = 0; a <= 40; a++) {
+      const th = (a / 40) * Math.PI * 2;
+      ring.push({
+        n: p.n + h.person_radius_m * Math.cos(th),
+        e: p.e + h.person_radius_m * Math.sin(th),
+        d: 0,
+      });
+    }
+    polyline(ring, css("--danger"), 1.5, 0.5);
+    marker({ n: p.n, e: p.e, d: 0 }, css("--danger"), ped.name, 4);
+  });
+}
+
+/* ── Camera collision ──────────────────────────────────────────────────
+
+   A chase camera sits behind its subject, and in a city that regularly means
+   inside a building -- the view fills with the back face of a wall and the
+   drone disappears. Game engines solve this with a "spring arm": shorten the
+   boom until the camera is in clear air.
+
+   Walked from the subject outward rather than from the camera inward, so the
+   first blocked sample stops the search. That way a boom passing through a
+   tower is cut short at the near face instead of being allowed to end in a
+   courtyard on the far side. */
+function clearBoomLength(target, fwd, desired) {
+  const city = flight.context && flight.context.city;
+  if (!city || (!city.footprints && !city.buildings)) return desired;
+
+  const STEPS = 12;
+  const PAD = 2.5;          // keep the lens off the glass
+
+  // Two different minimums, and conflating them is a bug: CHASE_MIN is how
+  // far the USER may zoom in, while the collision cut has to be free to go
+  // closer than that when a wall is nearer. Flooring the cut at CHASE_MIN
+  // returns a camera inside anything within 8 m of the subject.
+  const COLLAPSE_MIN = 2.0;
+  let clear = COLLAPSE_MIN;
+
+  for (let i = 1; i <= STEPS; i++) {
+    const d = (desired * i) / STEPS;
+    if (d < COLLAPSE_MIN) continue;
+    const probe = {
+      n: target.n - fwd.n * d,
+      e: target.e - fwd.e * d,
+      up: Math.max(1.5, target.up - fwd.up * d),
+    };
+    // Walk outward and stop at the FIRST blocked sample, so a boom crossing a
+    // tower is cut at the near face rather than being allowed to end in a
+    // courtyard on the far side.
+    if (insideAnyBuilding(probe, PAD)) break;
+    clear = d;
+  }
+  return clear;
+}
+
+function insideAnyBuilding(p, pad) {
+  const city = flight.context.city;
+
+  // Polygon footprints, from an OpenStreetMap import.
+  for (const f of city.footprints || []) {
+    if (p.up > f.h + pad) continue;
+    if (pointInPolygon(p.n, p.e, f.pts, pad)) return true;
+  }
+  // Axis-aligned boxes, from the procedural generator.
+  for (const b of city.buildings || []) {
+    if (p.up > b.h + pad) continue;
+    if (Math.abs(p.n - b.n) <= b.sn / 2 + pad &&
+        Math.abs(p.e - b.e) <= b.se / 2 + pad) return true;
+  }
+  return false;
+}
+
+/* Ray casting, with a cheap bounding-box reject first -- this runs eight
+   times a frame against every footprint, and a 273-polygon city would
+   otherwise cost more than the rest of the render. */
+function pointInPolygon(n, e, pts, pad) {
+  let minN = Infinity, maxN = -Infinity, minE = Infinity, maxE = -Infinity;
+  for (const [pn, pe] of pts) {
+    if (pn < minN) minN = pn;
+    if (pn > maxN) maxN = pn;
+    if (pe < minE) minE = pe;
+    if (pe > maxE) maxE = pe;
+  }
+  if (n < minN - pad || n > maxN + pad || e < minE - pad || e > maxE + pad) {
+    return false;
+  }
+
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [ni, ei] = pts[i];
+    const [nj, ej] = pts[j];
+    if ((ei > e) !== (ej > e) && n < ((nj - ni) * (e - ei)) / (ej - ei) + ni) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/* Replays a ping-pong walk/drive, matching MovingObstacle.position_at. */
+function trackAlong(waypoints, t, speed) {
+  if (!waypoints || waypoints.length < 2) return null;
+  const a = waypoints[0], b = waypoints[waypoints.length - 1];
+  const span = Math.hypot(b.n - a.n, b.e - a.e);
+  if (span < 1e-6) return a;
+  const cycle = (speed * Math.max(0, t)) % (2 * span);
+  const travelled = cycle <= span ? cycle : 2 * span - cycle;
+  const f = travelled / span;
+  return { n: a.n + (b.n - a.n) * f, e: a.e + (b.e - a.e) * f, d: 0 };
+}
+
+function isDark() {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr) return attr === "dark";
+  return matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+/* Surveillance targets, coloured by whether the flight actually covered them. */
+function drawTargets() {
+  const s = flight.context && flight.context.surveillance;
+  if (!s || !s.targets) return;
+  s.targets.forEach((t) => {
+    const colour = t.covered ? css("--ok") : css("--danger");
+    marker({ n: t.n, e: t.e, d: t.d }, colour, t.name, 5);
+    // Stalk to the ground so a target at street level is findable among
+    // buildings rather than lost against a wall.
+    seg({ n: t.n, e: t.e, d: t.d }, { n: t.n, e: t.e, d: 0 }, colour, 1);
+  });
+}
+
+/* The camera footprint: what the lens is pointed at right now. */
+function drawFov() {
+  const s = flight.context && flight.context.surveillance;
+  if (!s || !s.camera) return;
+  const p = sampleAt(frame);
+  const { fov_deg, range_m, depression_deg } = s.camera;
+  const yaw = (p.hdg * Math.PI) / 180;
+  const pitch = (depression_deg * Math.PI) / 180;
+  const half = (fov_deg * Math.PI) / 360;
+
+  ctx.globalAlpha = 0.5;
+  // Four cone edges, plus the boresight.
+  [[-half, -half], [half, -half], [-half, half], [half, half], [0, 0]].forEach(
+    ([dy, dp]) => {
+      const y = yaw + dy, pi = pitch + dp;
+      const h = Math.cos(pi);
+      const end = {
+        n: p.n + range_m * h * Math.cos(y),
+        e: p.e + range_m * h * Math.sin(y),
+        d: p.d + range_m * Math.sin(pi),
+      };
+      // Stop at the ground: a cone drawn through the pavement reads as a
+      // sensor that sees underground.
+      if (end.d > 0 && p.d < 0) {
+        const t = -p.d / (end.d - p.d);
+        end.n = p.n + (end.n - p.n) * t;
+        end.e = p.e + (end.e - p.e) * t;
+        end.d = 0;
+      }
+      seg(p, end, css("--accent"), 1);
+    }
+  );
+  ctx.globalAlpha = 1;
+}
+
+/* Moving obstacles, drawn at their position for the CURRENT playback time.
+
+   Reconstructed from waypoints and speed rather than logged per frame: the
+   motion is a pure function of time on the Python side too, so replaying it
+   here costs nothing and keeps the flight record small. */
+function moverPosition(m, t) {
+  const pts = m.waypoints.concat(m.loop ? [m.waypoints[0]] : []);
+  const legs = [];
+  let total = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const d = Math.hypot(pts[i + 1].n - pts[i].n, pts[i + 1].e - pts[i].e,
+                         pts[i + 1].d - pts[i].d);
+    legs.push(d);
+    total += d;
+  }
+  if (total < 1e-9) return pts[0];
+
+  let travelled = m.speed * Math.max(0, t);
+  if (m.loop) {
+    travelled = travelled % total;
+  } else {
+    // Ping-pong, matching MovingObstacle.position_at.
+    const cycle = travelled % (2 * total);
+    travelled = cycle <= total ? cycle : 2 * total - cycle;
+  }
+  for (let i = 0; i < legs.length; i++) {
+    if (travelled <= legs[i] || i === legs.length - 1) {
+      const f = legs[i] > 1e-9 ? Math.min(1, travelled / legs[i]) : 0;
+      return {
+        n: pts[i].n + (pts[i + 1].n - pts[i].n) * f,
+        e: pts[i].e + (pts[i + 1].e - pts[i].e) * f,
+        d: pts[i].d + (pts[i + 1].d - pts[i].d) * f,
+      };
+    }
+    travelled -= legs[i];
+  }
+  return pts[pts.length - 1];
+}
+
+function drawMovers() {
+  const movers = flight.context && flight.context.movers;
+  if (!movers) return;
+  const t = sampleAt(frame).t;
+
+  movers.forEach((m) => {
+    // The track it patrols, so its intent is visible, not just its position.
+    const lane = m.waypoints.concat(m.loop ? [m.waypoints[0]] : []);
+    polyline(lane, css("--danger"), 1, 0.25);
+
+    const p = moverPosition(m, t);
+    const s = project(p);
+    if (!s) return;
+    // Radius drawn to scale: the exclusion volume is the thing that matters
+    // for replanning, not the dot at its centre.
+    const scale = project({ n: p.n + m.radius, e: p.e, d: p.d });
+    const px = scale ? Math.max(4, Math.hypot(scale.x - s.x, scale.y - s.y)) : 6;
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = css("--danger");
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, px, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    marker(p, css("--danger"), m.name, 4);
+  });
+}
+
+/* Thin-obstacle sensor returns, shown as they accumulate over the flight.
+   Fading older ones conveys the central point: a wire is not seen once and
+   known, it is inferred from returns piling up while you close on it. */
+function drawDetections() {
+  const dets = flight.context && flight.context.detections;
+  if (!dets || !dets.length) return;
+  const now = sampleAt(frame).t;
+  const track = flight.track;
+
+  ctx.globalAlpha = 0.9;
+  dets.forEach((d) => {
+    if (d.t > now || now - d.t > 12) return;
+    // Place the return along the bearing it was seen on, from wherever the
+    // vehicle was at that moment.
+    let src = track[0];
+    for (let i = 0; i < track.length; i++) {
+      if (track[i].t >= d.t) { src = track[i]; break; }
+    }
+    const rad = (d.bearing * Math.PI) / 180;
+    const hit = {
+      n: src.n + d.range * Math.cos(rad),
+      e: src.e + d.range * Math.sin(rad),
+      d: src.d,
+    };
+    const s = project(hit);
+    if (!s) return;
+    const age = 1 - (now - d.t) / 12;
+    ctx.globalAlpha = 0.15 + 0.75 * age;
+    ctx.fillStyle = d.kind === "cable" ? css("--danger") : css("--ok");
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+/* The inferred structure map: poles the vehicle triangulated, and the spans it
+   deduced between them. Drawn distinctly from ground truth, because the whole
+   point is that these are BELIEFS -- derived from camera bearings, carrying
+   real error, and possibly wrong. Opacity tracks confidence so a weakly held
+   span reads as weakly held. */
+function drawInferred() {
+  const p = flight.context && flight.context.perception;
+  if (!p) return;
+
+  // Points come from the exported cable geometry, so what is drawn is exactly
+  // the volume the planner avoided -- sag, attachment height and all.
+  (p.spans || []).forEach((s) => {
+    const alpha = 0.25 + 0.7 * (s.conf || 0.5);
+    polyline(
+      (s.points || []).map((q) => ({ n: q.n, e: q.e, d: q.d })),
+      s.corr ? css("--ok") : css("--warn"), 2.5, alpha
+    );
+  });
+
+  (p.poles || []).forEach((pole) => {
+    const top = { n: pole.n, e: pole.e, d: pole.d };
+    const base = { n: pole.n, e: pole.e, d: 0 };
+    const alpha = 0.3 + 0.65 * (pole.conf || 0.5);
+    // The pole itself, so height and position read directly.
+    polyline([base, top], css("--accent"), 2.5, alpha);
+    const s = project(top);
+    if (!s) return;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = css("--accent");
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+}
+
+/* Ground-truth conductors, for comparison against what was inferred. Dashed,
+   so a viewer can see at a glance which real spans the map missed. */
+function drawTrueWires() {
+  const wires = flight.context && flight.context.true_wires;
+  if (!wires) return;
+  ctx.setLineDash([4, 4]);
+  wires.forEach((w) => {
+    polyline(
+      w.points.map((q) => ({ n: q.n, e: q.e, d: q.d })),
+      css("--danger"), 1.5, 0.55
+    );
+  });
+  ctx.setLineDash([]);
+}
+
+function drawWind() {
+  const w = flight.context.wind;
+  if (!w || (Math.abs(w.n) < 0.1 && Math.abs(w.e) < 0.1)) return;
+  const mag = Math.hypot(w.n, w.e);
+  const scale = 40 / Math.max(mag, 0.1);
+  ctx.globalAlpha = 0.55;
+  for (let i = 0; i < 4; i++) {
+    const base = { n: -140 + i * 26, e: -150, d: -30 };
+    seg(base, { n: base.n + w.n * scale, e: base.e + w.e * scale, d: -30 },
+        css("--muted"), 1.5);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function render() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w * dpr || cv.height !== h * dpr) {
+    cv.width = w * dpr;
+    cv.height = h * dpr;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  // Paint our own background rather than relying on the body showing through,
+  // so the canvas is self-contained when exported or composited.
+  ctx.fillStyle = css("--bg");
+  ctx.fillRect(0, 0, w, h);
+
+  drawGrid();
+  if (!flight) return;
+
+  const ctxData = flight.context || {};
+  if (ctxData.geofence_radius_m) {
+    drawCircle(ctxData.geofence_radius_m, 0, css("--danger"), [5, 5]);
+  }
+  (ctxData.landing_sites || []).forEach((s) => {
+    drawCircle(s.radius, 0, css("--warn"), [3, 3]);
+    ctx.save();
+    ctx.translate(0, 0);
+    marker({ n: s.n, e: s.e, d: 0 }, css("--warn"), s.name, 4);
+    ctx.restore();
+  });
+
+  // Buildings first: the track and markers draw over them, which keeps the
+  // flight path readable even where it passes behind a tower. Correct
+  // occlusion of the path would need per-segment depth sorting against every
+  // face, and losing sight of the drone is worse than a small depth lie.
+  drawRoads();
+  drawCity();
+  drawInfrastructure();
+  drawHazards();
+  drawWind();
+  drawTrueWires();
+  drawInferred();
+  drawTrack();
+  drawMovers();
+  drawDetections();
+  drawTargets();
+  marker({ n: 0, e: 0, d: 0 }, css("--ok"), "home", 5);
+  drawFov();
+  drawVehicle();
+}
+
+/* -- playback ------------------------------------------------------------- */
+
+/* Playback is driven by TIME, not by sample index.
+
+   The recorder skips samples that have not moved, and the exporter thins the
+   track to its shape, so samples are not uniform in time -- a straight leg is
+   two points spanning forty seconds. Advancing an index per tick would spend
+   as long crossing that leg as rounding a corner. `frame` is therefore a
+   time in seconds, and positions are interpolated between the two samples
+   bracketing it.
+
+   That also means the record only has to describe the path's shape, which is
+   what makes aggressive decimation safe. */
+function duration() {
+  const t = flight.track;
+  return t.length ? t[t.length - 1].t : 0;
+}
+
+/* Index of the last sample at or before time `t`. Binary search, because this
+   runs several times a frame over a track that may be thousands long. */
+function indexAtTime(t) {
+  const track = flight.track;
+  let lo = 0, hi = track.length - 1;
+  if (t <= track[0].t) return 0;
+  if (t >= track[hi].t) return hi;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (track[mid].t <= t) lo = mid; else hi = mid;
+  }
+  return lo;
+}
+
+/* Interpolated vehicle state. Heading takes the shortest arc, or a track that
+   crosses north would spin the marker the long way round. */
+function sampleAt(t) {
+  const track = flight.track;
+  const i = indexAtTime(t);
+  const a = track[i];
+  const b = track[Math.min(i + 1, track.length - 1)];
+  const span = b.t - a.t;
+  if (span <= 1e-6) return a;
+
+  const f = Math.max(0, Math.min(1, (t - a.t) / span));
+  const dh = ((b.hdg - a.hdg + 540) % 360) - 180;
+  return {
+    t,
+    n: a.n + (b.n - a.n) * f,
+    e: a.e + (b.e - a.e) * f,
+    d: a.d + (b.d - a.d) * f,
+    hdg: (a.hdg + dh * f + 360) % 360,
+    batt: a.batt + (b.batt - a.batt) * f,
+    phase: a.phase,
+  };
+}
+
+function updateHud() {
+  if (!flight) return;
+  const p = sampleAt(frame);
+  document.getElementById("h-t").textContent = p.t.toFixed(1) + " s";
+  document.getElementById("h-alt").textContent = (-p.d).toFixed(1) + " m";
+  document.getElementById("h-dist").textContent = Math.hypot(p.n, p.e).toFixed(0) + " m";
+  document.getElementById("h-batt").textContent = Math.round(p.batt * 100) + "%";
+  document.getElementById("h-phase").textContent = p.phase;
+  document.getElementById("time").textContent =
+    p.t.toFixed(1) + " / " + duration().toFixed(1) + " s";
+  document.getElementById("scrub").value = String(Math.round(frame * 10));
+}
+
+function tick(now) {
+  requestAnimationFrame(tick);
+  const dt = Math.min((now - lastRAF) / 1000, 0.1); // clamp after a tab switch
+  applyKeys(dt);
+
+  if (playing && flight) {
+    // Advance on wall-clock so playback speed is independent of frame rate,
+    // and in seconds so it is independent of how the track was sampled.
+    frame += dt * speedMul;
+    const total = duration();
+    if (frame >= total) {
+      // Loop rather than stop, so the motion stays live while you fly the
+      // camera around it. Stopping at the end means every orbit adjustment
+      // has to be followed by hitting play again.
+      if (looping) frame = 0;
+      else { frame = total; setPlaying(false); }
+    }
+    updateHud();
+  }
+
+  if (cam.follow && flight) {
+    // Chase camera on a collision-aware boom. Easing rather than snapping,
+    // so the ride-along does not jitter on every sample.
+    const p = sampleAt(frame);
+    const target = { n: p.n, e: p.e, up: -p.d };
+
+    if (cam.autoHeading) {
+      // The aircraft's own heading, which during an observation is pointed at
+      // whatever it is watching -- so tracking it shows the subject, not just
+      // the tail. Eased along the SHORTEST arc, or crossing north would send
+      // the camera the long way round through 359 degrees.
+      const desired = (p.hdg * Math.PI) / 180;
+      const delta = Math.atan2(
+        Math.sin(desired - cam.yaw), Math.cos(desired - cam.yaw)
+      );
+      cam.yaw += delta * Math.min(1, dt * 2.2);
+    }
+
+    const { fwd } = basis();
+    const boom = clearBoomLength(target, fwd, cam.focusDist);
+    const want = {
+      n: target.n - fwd.n * boom,
+      e: target.e - fwd.e * boom,
+      // Never let the boom put the eye underground; at 1.5 m the camera is
+      // standing on the pavement rather than buried in it.
+      up: Math.max(1.5, target.up - fwd.up * boom),
+    };
+    const k = Math.min(1, dt * 3);
+    cam.eye.n += (want.n - cam.eye.n) * k;
+    cam.eye.e += (want.e - cam.eye.e) * k;
+    cam.eye.up += (want.up - cam.eye.up) * k;
+  }
+
+  const fb = document.getElementById("followBtn");
+  fb.dataset.on = cam.follow ? "1" : "";
+  // Say which mode you are in: tracking the aircraft's heading, or holding
+  // the angle you chose. Without this the only way to discover the lock was
+  // released is to notice the camera stopped swinging.
+  fb.textContent = cam.follow && !cam.autoHeading ? "follow · fixed" : "follow";
+  lastRAF = now;
+  render();
+}
+
+function setPlaying(on) {
+  playing = on;
+  document.getElementById("play").textContent = on ? "pause" : "play";
+}
+
+/* -- interaction ---------------------------------------------------------- */
+
+let drag = null;
+
+/* Active touch points, for pinch and two-finger pan.
+
+   `touch-action: none` stops the browser from handling gestures itself, which
+   is required for single-finger look to work at all -- but it also disables
+   pinch. Without the handlers below there is simply no way to zoom on a
+   phone, which was the state of things until this was added. */
+const touches = new Map();
+let pinch = null;
+
+function pinchState() {
+  const pts = [...touches.values()];
+  if (pts.length < 2) return null;
+  const [a, b] = pts;
+  return {
+    dist: Math.hypot(a.x - b.x, a.y - b.y),
+    cx: (a.x + b.x) / 2,
+    cy: (a.y + b.y) / 2,
+  };
+}
+
+cv.addEventListener("contextmenu", (e) => e.preventDefault());
+
+cv.addEventListener("pointerdown", (e) => {
+  if (e.pointerType === "touch") {
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2) {
+      pinch = pinchState();
+      drag = null;              // second finger cancels the look drag
+      return;
+    }
+  }
+  // Unity / Roblox Studio conventions:
+  //   left drag        turn in place (free look)
+  //   right / middle   pan (truck and pedestal)
+  //   alt + left       orbit around the point ahead
+  const pan = e.button === 1 || e.button === 2 || e.shiftKey;
+  const orbit = e.altKey && !pan;
+  drag = { x: e.clientX, y: e.clientY, pan, orbit };
+  // Looking around while following is an orbit of the vehicle, so follow
+  // survives it. Panning is a deliberate departure, so it does not.
+  if (pan) cam.follow = false;
+  // Capture keeps the drag alive when the cursor leaves the canvas. It can
+  // throw if the pointer is already gone, and an exception here would abort
+  // the handler and strand the drag, so it must not be allowed to escape.
+  try { cv.setPointerCapture(e.pointerId); } catch { /* drag still works */ }
+});
+
+cv.addEventListener("pointermove", (e) => {
+  if (e.pointerType === "touch" && touches.has(e.pointerId)) {
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  }
+
+  // Two fingers: spread to zoom, slide to pan. Handled before the look drag,
+  // because a pinch must never be interpreted as a rotation.
+  if (pinch && touches.size >= 2) {
+    const now = pinchState();
+    if (!now) return;
+    const scale = now.dist / Math.max(pinch.dist, 1);
+    const step = cam.focusDist * (scale - 1);
+
+    if (cam.follow) {
+      cam.focusDist = Math.max(CHASE_MIN, Math.min(600, cam.focusDist - step));
+    } else {
+      const { fwd, right, up } = basis();
+      moveEye(fwd, step);
+      cam.focusDist = Math.max(4, Math.min(4000, cam.focusDist - step));
+      // Sliding the midpoint pans, so a two-finger gesture reframes without
+      // needing a modifier key nobody has on a phone.
+      const perPixel = cam.focusDist / (Math.min(cv.clientWidth, cv.clientHeight) * 0.9);
+      moveEye(right, -(now.cx - pinch.cx) * perPixel);
+      moveEye(up, (now.cy - pinch.cy) * perPixel);
+    }
+    pinch = now;
+    return;
+  }
+
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+
+  if (drag.pan) {
+    // Scale by focus distance so a drag covers the same apparent ground at
+    // any zoom -- at 800 m out, one pixel is a lot of world.
+    const perPixel = cam.focusDist / (Math.min(cv.clientWidth, cv.clientHeight) * 0.9);
+    const { right, up } = basis();
+    moveEye(right, -dx * perPixel);
+    moveEye(up, dy * perPixel);
+  } else if (drag.orbit) {
+    // Swing the eye around the point ahead, keeping that point fixed on
+    // screen. Useful for studying one waypoint; no longer the only mode.
+    const pivot = focusPoint();
+    turn(dx, dy);
+    const { fwd } = basis();
+    cam.eye = {
+      n: pivot.n - fwd.n * cam.focusDist,
+      e: pivot.e - fwd.e * cam.focusDist,
+      up: pivot.up - fwd.up * cam.focusDist,
+    };
+  } else {
+    // Free look: the camera turns where it stands. This is the whole point
+    // of the change -- the world does not swing around a tethered pivot.
+    turn(dx, dy);
+    // Looking somewhere deliberately means you want to keep looking there.
+    cam.autoHeading = false;
+  }
+  drag.x = e.clientX;
+  drag.y = e.clientY;
+});
+
+function turn(dx, dy) {
+  cam.yaw += dx * 0.005;
+  cam.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, cam.pitch - dy * 0.005));
+}
+
+function endPointer(e) {
+  touches.delete(e.pointerId);
+  if (touches.size < 2) pinch = null;
+  drag = null;
+}
+cv.addEventListener("pointerup", endPointer);
+cv.addEventListener("pointercancel", endPointer);
+cv.addEventListener("pointerleave", endPointer);
+
+cv.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const step = -e.deltaY * 0.0008 * Math.max(4, cam.focusDist);
+
+  if (cam.follow) {
+    // While following, the scroll wheel is a chase-distance control. Dollying
+    // the eye here would fight the follow logic, which re-derives the eye
+    // from focusDist every frame -- the camera would snap straight back and
+    // zoom would appear not to work at all.
+    cam.focusDist = Math.max(CHASE_MIN, Math.min(600, cam.focusDist - step));
+    return;
+  }
+
+  // Free camera: dolly along the view direction, so scrolling carries you
+  // INTO the scene the way it does in an editor viewport.
+  const { fwd } = basis();
+  moveEye(fwd, step);
+  cam.focusDist = Math.max(4, Math.min(4000, cam.focusDist - step));
+}, { passive: false });
+
+// Double-click flies the focus onto a point of the track and looks at it,
+// which is what "frame this" does in an editor.
+cv.addEventListener("dblclick", (e) => {
+  if (!flight) return;
+  const rect = cv.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  let best = null, bestD = 40;
+  flight.track.forEach((p) => {
+    const s = project(p);
+    if (!s) return;
+    const d = Math.hypot(s.x - mx, s.y - my);
+    if (d < bestD) { bestD = d; best = p; }
+  });
+  if (best) {
+    cam.follow = false;
+    lookAtPoint({ n: best.n, e: best.e, up: -best.d });
+  }
+});
+
+/* Keyboard: WASD flies, QE changes height, R reframes, F rides along. */
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") return;
+  const k = e.key.toLowerCase();
+  if (k === " ") { e.preventDefault(); document.getElementById("play").click(); return; }
+  if (k === "r") { frameFlight(); return; }
+  if (k === "f") { cam.follow = !cam.follow; if (cam.follow) enterFollow(); return; }
+  keys.add(k);
+});
+window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+window.addEventListener("blur", () => keys.clear());
+
+function applyKeys(dt) {
+  if (!keys.size) return;
+  const { right, fwd } = basis();
+  // Walk along the ground rather than burrowing into it: W follows where you
+  // are looking horizontally, and Q/E handle height. Flying straight down
+  // every time you look at the pavement is the classic free-camera annoyance.
+  const ground = Math.hypot(fwd.n, fwd.e) || 1;
+  const walk = { n: fwd.n / ground, e: fwd.e / ground, up: 0 };
+
+  const speed = Math.max(8, cam.focusDist) * 0.9 * dt * (keys.has("shift") ? 3 : 1);
+  if (keys.has("w") || keys.has("arrowup")) moveEye(walk, speed);
+  if (keys.has("s") || keys.has("arrowdown")) moveEye(walk, -speed);
+  if (keys.has("a") || keys.has("arrowleft")) moveEye(right, -speed);
+  if (keys.has("d") || keys.has("arrowright")) moveEye(right, speed);
+  if (keys.has("q")) cam.eye.up -= speed;
+  if (keys.has("e")) cam.eye.up += speed;
+  cam.follow = false;
+}
+
+/* View presets place the eye relative to the flight, then look back at it. */
+function setView(yaw, pitch) {
+  const pivot = flight ? flightCentre() : { n: 0, e: 0, up: 0 };
+  const d = cam.focusDist;
+  cam.yaw = yaw;
+  cam.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
+  const { fwd } = basis();
+  cam.eye = {
+    n: pivot.n - fwd.n * d,
+    e: pivot.e - fwd.e * d,
+    up: pivot.up - fwd.up * d,
+  };
+  cam.follow = false;
+}
+document.getElementById("top").onclick = () => setView(0, -PITCH_LIMIT);
+document.getElementById("side").onclick = () => setView(0, -0.05);
+document.getElementById("iso").onclick = () => setView(0.79, -0.5);
+document.getElementById("reset").onclick = () => frameFlight();
+document.getElementById("followBtn").onclick = () => {
+  cam.follow = !cam.follow;
+  if (cam.follow) { enterFollow(); setPlaying(true); }
+};
+
+/* Reasonable chase distance on entering follow.
+
+   `frameFlight` sets focusDist to fit the whole flight -- often several
+   hundred metres. Inheriting that put the camera so far back that following
+   looked like nothing had happened. */
+const CHASE_MIN = 8;
+const CHASE_DEFAULT = 55;
+
+function enterFollow() {
+  cam.autoHeading = true;
+  if (cam.focusDist > 140) cam.focusDist = CHASE_DEFAULT;
+  cam.focusDist = Math.max(CHASE_MIN, cam.focusDist);
+  // Level the camera off too. `frameFlight` looks steeply down to fit a whole
+  // survey in frame, and inheriting that at chase range fills the shot with
+  // pavement -- the vehicle is centred but there is nothing around it to
+  // read. A shallow angle shows the aircraft in its surroundings.
+  cam.pitch = Math.max(-0.34, Math.min(-0.08, cam.pitch));
+}
+
+document.getElementById("play").onclick = () => {
+  if (frame >= duration()) frame = 0;
+  setPlaying(!playing);
+};
+document.getElementById("scrub").oninput = (e) => {
+  // Scrubbing seeks without stopping -- dragging the slider while it plays is
+  // a normal thing to want, and pausing on every touch fights the user.
+  // The slider carries tenths of a second, so its resolution is independent
+  // of how many samples the track happens to have.
+  frame = Number(e.target.value) / 10;
+  updateHud();
+};
+document.getElementById("loopBtn").onclick = (e) => {
+  looping = !looping;
+  e.target.dataset.on = looping ? "1" : "";
+};
+document.getElementById("speedBtn").onclick = (e) => {
+  const steps = [1, 2, 4, 8, 16];
+  speedMul = steps[(steps.indexOf(speedMul) + 1) % steps.length];
+  e.target.textContent = speedMul + "x";
+};
+
+document.getElementById("file").onchange = (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      load(JSON.parse(reader.result));
+    } catch (err) {
+      alert("Could not parse that file as a flight record: " + err.message);
+    }
+  };
+  reader.readAsText(f);
+};
+
+/* Centre of the flight's bounding box. Sized off the track only -- a 900 m
+   geofence around a 300 m survey would otherwise shrink the thing you
+   actually came to look at. */
+function flightBounds() {
+  let minN = Infinity, maxN = -Infinity, minE = Infinity, maxE = -Infinity, maxUp = 0;
+  flight.track.forEach((p) => {
+    minN = Math.min(minN, p.n); maxN = Math.max(maxN, p.n);
+    minE = Math.min(minE, p.e); maxE = Math.max(maxE, p.e);
+    maxUp = Math.max(maxUp, -p.d);
+  });
+  return { minN, maxN, minE, maxE, maxUp };
+}
+
+function flightCentre() {
+  const b = flightBounds();
+  return { n: (b.minN + b.maxN) / 2, e: (b.minE + b.maxE) / 2, up: b.maxUp / 2 };
+}
+
+/* Place the camera back from the flight so all of it is in view, looking at
+   its centre. The free camera has no pivot, so framing means positioning the
+   EYE -- not setting a target and orbiting it. */
+function frameFlight() {
+  if (!flight) return;
+  const b = flightBounds();
+  const centre = flightCentre();
+  const extent = Math.max(b.maxN - b.minN, b.maxE - b.minE, b.maxUp, 20);
+  cam.focusDist = extent * 1.6;
+  setView(0.79, -0.5);
+  lookAtPoint(centre);
+  fitGrid(Math.max(
+    Math.abs(b.maxN), Math.abs(b.minN), Math.abs(b.maxE), Math.abs(b.minE), 50
+  ));
+}
+
+function load(data) {
+  if (!data || !Array.isArray(data.track) || !data.track.length) {
+    alert("That JSON has no track data.");
+    return;
+  }
+  flight = data;
+  frame = 0;
+  const scrub = document.getElementById("scrub");
+  scrub.max = String(Math.round(duration() * 10));
+  scrub.disabled = false;
+  document.getElementById("play").disabled = false;
+  document.getElementById("empty").hidden = true;
+  document.getElementById("hud").hidden = false;
+  document.getElementById("legend").hidden = false;
+
+  // Built as DOM nodes, not innerHTML: `aborted_reason` and the target names
+  // below come from a loaded JSON file, so string-concatenating them into
+  // markup is an injection path. textContent cannot execute anything.
+  const st = document.getElementById("c-status");
+  st.replaceChildren(
+    Object.assign(document.createElement("b"), {
+      textContent: data.completed ? "completed" : "aborted",
+    }),
+    document.createTextNode(
+      data.completed
+        ? " in " + Number(data.duration_s) + " s"
+        : " \u2014 " + String(data.aborted_reason || "unknown")
+    )
+  );
+  const w = data.context && data.context.wind;
+  document.getElementById("c-wind").textContent = w && (w.n || w.e)
+    ? "wind " + Math.hypot(w.n, w.e).toFixed(1) + " m/s"
+    : "wind calm";
+
+  const perc = data.context && data.context.perception_summary;
+  const mapChip = document.getElementById("c-map");
+  if (perc) {
+    mapChip.hidden = false;
+    mapChip.replaceChildren(
+      document.createTextNode("map "),
+      Object.assign(document.createElement("b"), {
+        textContent: Number(perc.fixed_poles) + " poles / " + Number(perc.spans) + " spans",
+      })
+    );
+  } else {
+    mapChip.hidden = true;
+  }
+
+  const cov = data.context && data.context.coverage_summary;
+  const covChip = document.getElementById("c-cov");
+  if (cov) {
+    covChip.hidden = false;
+    covChip.replaceChildren(
+      document.createTextNode("coverage "),
+      Object.assign(document.createElement("b"), {
+        textContent: Math.round(Number(cov.fraction) * 100) + "%",
+      }),
+      document.createTextNode(
+        cov.missed.length ? " \u00b7 missed " + cov.missed.map(String).join(",") : ""
+      )
+    );
+  } else {
+    covChip.hidden = true;
+  }
+
+  buildDrawGeometry();
+  frameFlight();
+  updateHud();
+  // Start moving immediately and loop. A replay that opens frozen on frame 0
+  // makes you hunt for the play button before you can see anything happen.
+  setPlaying(true);
+}
+
+// A record embedded at build time, if present, so the page can be shared
+// with a flight already in it.
+if (window.EMBEDDED_FLIGHT) load(window.EMBEDDED_FLIGHT);
+
+requestAnimationFrame(tick);
+</script>

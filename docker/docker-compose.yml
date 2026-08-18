@@ -1,0 +1,54 @@
+# PX4 SITL plus an autonomy client, on a shared network with static addresses.
+#
+# Why a shared network rather than published ports: PX4 binds MAVLink to the
+# container's loopback interface, so `-p 14540:14540/udp` forwards to eth0 and
+# never reaches it. The container also has to be told where to SEND telemetry,
+# and it resolves that address once at startup -- hence fixed IPs rather than
+# service names, which would not resolve before the client is up.
+#
+#   docker compose -f docker/docker-compose.yml up --abort-on-container-exit
+#
+# The client mounts the repo read-only and runs px4_smoke.py against SITL.
+
+name: dronelab-px4
+
+networks:
+  px4net:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+services:
+  px4:
+    image: jonasvautherin/px4-gazebo-headless:latest
+    # The argument is HOST_API: where PX4 sends MAVLink on UDP 14540.
+    command: ["172.28.0.10"]
+    networks:
+      px4net:
+        ipv4_address: 172.28.0.5
+    # PX4's interactive shell redraws its prompt continuously, which produces
+    # hundreds of megabytes of useless log within minutes.
+    logging:
+      driver: none
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep px4 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  client:
+    image: python:3.13-slim
+    depends_on:
+      px4:
+        condition: service_healthy
+    networks:
+      px4net:
+        ipv4_address: 172.28.0.10
+    volumes:
+      - ..:/sim:ro
+    working_dir: /sim
+    environment:
+      PX4_ADDRESS: "udpin://0.0.0.0:14540"
+    command: >
+      sh -c "pip install --quiet --root-user-action=ignore mavsdk &&
+             python docker/px4_smoke.py"

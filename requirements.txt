@@ -1,0 +1,8 @@
+# The autonomy stack itself needs nothing beyond the standard library.
+# These are for testing and for the optional PX4 backend.
+
+pytest>=8.0
+pytest-asyncio>=0.24
+
+# Optional: only needed for `--backend px4` against PX4 SITL or real hardware.
+# mavsdk>=3.17
