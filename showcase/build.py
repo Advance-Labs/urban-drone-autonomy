@@ -31,6 +31,19 @@ TEMPLATE = HERE / "template.html"
 FLIGHTS = HERE / "flights"
 OUTPUT = HERE / "index.html"
 
+# Frame policy: CSP `frame-ancestors`, NOT `X-Frame-Options`.
+#
+# advancelabs.dev embeds this showcase in its research section, and X-Frame-Options cannot
+# express an allowlist — its only useful values are DENY and SAMEORIGIN, so permitting one
+# other origin is impossible with it. `frame-ancestors` takes a list and supersedes XFO in
+# every browser that implements it, which is why XFO is dropped rather than kept alongside.
+#
+# This is still a real restriction: any origin NOT listed here is refused, so the page
+# cannot be framed by an unrelated site. Widen the list only for origins we operate.
+#
+# A parent page gets NO readable signal when a frame is refused (no error event, nothing
+# observable cross-origin), so a wrong value here shows up as a silently blank rectangle on
+# the embedding page rather than as an error anywhere.
 VERCEL_JSON = """{
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "headers": [
@@ -39,7 +52,7 @@ VERCEL_JSON = """{
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" }
+        { "key": "Content-Security-Policy", "value": "frame-ancestors 'self' https://advancelabs.dev https://*.advancelabs.dev" }
       ]
     }
   ]

@@ -64,6 +64,20 @@
     --ok: #4fb07a;
   }
   :root {
+    /*
+     * This deck genuinely supports both schemes (light --ground above, dark variant in the
+     * prefers-color-scheme block), but it never declared that, so `color-scheme` computed
+     * as `normal` and the browser drew native UI for a light page in BOTH. On the dark
+     * variant that meant bright scrollbars inside the dark scroll panels.
+     *
+     * Declaring both keeps the existing behaviour and lets native UI follow the same
+     * preference the CSS already follows. The page itself sets `overflow: hidden` (the deck
+     * IS the page), so this affects the inner scrollable panels, not a page-level bar.
+     *
+     * This matters more now that advancelabs.dev frames this page in its research section.
+     */
+    color-scheme: light dark;
+
     --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
     --sans: ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
   }
