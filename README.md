@@ -8,6 +8,7 @@ Pure standard library to run. `pytest` to test. MAVSDK only if you want to fly i
 [![Tests](https://img.shields.io/badge/tests-275%20passing-2ea44f?style=flat-square)](tests/)
 [![PX4 SITL](https://img.shields.io/badge/PX4%20SITL-verified-19A0E0?style=flat-square)](docker/)
 [![Dependencies](https://img.shields.io/badge/runtime%20deps-none-black?style=flat-square)](requirements.txt)
+[![MCP servers live](https://whobuildsagents.com/badge/advancelabs.dev.svg)](https://whobuildsagents.com/advancelabs.dev)
 
 ### ✈︎ [Fly it in your browser → drone.advancelabs.dev](https://drone.advancelabs.dev)
 
